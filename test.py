@@ -3,6 +3,7 @@ from xjson import (
     Type,
     Token,
     XJson,
+    Vars,
 )
 from utils import log
 
@@ -10,35 +11,48 @@ from utils import log
 class TestXJson(unittest.TestCase):
     def test_parsed_string(self):
         string = '"abc"'
-        s = XJson.parsed_string(string, 0)
+        vars = Vars(i=0)
+        s = XJson.parsed_string(string, vars)
         assert s == 'abc'
-        string = '"\n\\"a"'
-        s = XJson.parsed_string(string, 0)
-        assert s == '\n\\"a'
+        string = '"\\"\\t\\n"'
+        vars = Vars(i=0)
+        s = XJson.parsed_string(string, vars)
+        assert s == '"\t\n'
+        string = '"\\u263A"'
+        vars = Vars(i=0)
+        s = XJson.parsed_string(string, vars)
+        assert s == '\u263A'
 
     def test_parsed_number(self):
         string = '1'
-        s = XJson.parsed_number(string, 0)
+        vars = Vars(i=0)
+        s = XJson.parsed_number(string, vars)
         assert s == '1'
         string = '1.1'
-        s = XJson.parsed_number(string, 0)
+        vars = Vars(i=0)
+        s = XJson.parsed_number(string, vars)
         assert s == '1.1'
         string = '-1'
-        s = XJson.parsed_number(string, 0)
+        vars = Vars(i=0)
+        s = XJson.parsed_number(string, vars)
         assert s == '-1'
         string = '1.1e-9'
-        s = XJson.parsed_number(string, 0)
+        vars = Vars(i=0)
+        s = XJson.parsed_number(string, vars)
         assert s == '1.1e-9'
 
     def test_parsed_keyword(self):
         string = 'true'
-        s = XJson.parsed_keyword(string, 0)
+        vars = Vars(i=0)
+        s = XJson.parsed_keyword(string, vars)
         assert s == 'true'
         string = 'false,'
-        s = XJson.parsed_keyword(string, 0)
+        vars = Vars(i=0)
+        s = XJson.parsed_keyword(string, vars)
         assert s == 'false'
         string = 'null}'
-        s = XJson.parsed_keyword(string, 0)
+        vars = Vars(i=0)
+        s = XJson.parsed_keyword(string, vars)
         assert s == 'null'
 
     def test_parsed_tokens(self):
@@ -143,9 +157,10 @@ class TestXJson(unittest.TestCase):
             "float": 1.1,
             "bool": True,
             "null": None,
+            "unicode": "\u263A",
         }
         string = XJson.stringify(data)
-        expected_string = '{"string":"abcd","int":1,"float":1.1,"bool":true,"null":null}'
+        expected_string = '{"string":"abcd","int":1,"float":1.1,"bool":true,"null":null,"unicode":"\\u263a"}'
         assert string == expected_string
         #
         data = [

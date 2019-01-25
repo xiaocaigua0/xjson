@@ -71,32 +71,64 @@ class XJson:
         raise TypeError('TypeError: data is not JSON serializable')
 
     @classmethod
-    def parsed_string(cls, string, i):
+    def parsed_unicode(cls, string):
+        try:
+            s = '\\u{}'.format(string).encode('utf-8').decode('unicode_escape')
+        except Exception as e:
+            return cls.parsed_error()
+        return s
+
+    @classmethod
+    def parsed_escape(cls, string, vars):
+        vars.i += 1
+        c = string[vars.i]
+        t = {
+            '\\': '\\',
+            '"': '"',
+            '/': '/',
+            'b': '\b',
+            'f': '\f',
+            't': '\t',
+            'n': '\n',
+            'r': '\r',
+            'u': 'u',
+        }
+        s = t.get(c)
+        if s is None:
+            return cls.parsed_error()
+        vars.i += 1
+        if s == 'u':
+            s = cls.parsed_unicode(string[vars.i:vars.i+4])
+            vars.i += 4
+        return s
+
+    @classmethod
+    def parsed_string(cls, string, vars):
         length = len(string)
         s = ''
-        i += 1
-        while i < length:
-            c = string[i]
+        vars.i += 1
+        while vars.i < length:
+            c = string[vars.i]
             if c == '"':
+                vars.i += 1
                 return s
             elif c == '\\':
-                s += string[i:i+2]
-                i += 2
+                s += cls.parsed_escape(string, vars)
             else:
                 s += c
-                i += 1
+                vars.i += 1
         # 没有找到引号，程序出错
         return cls.parsed_error()
 
     @classmethod
-    def parsed_number(cls, string, i):
+    def parsed_number(cls, string, vars):
         length = len(string)
         digits = '1234567890'
         valid_chars = digits + '-' + '.' + 'e'
         exist_dot = False
         s = ''
-        while i < length:
-            c = string[i]
+        while vars.i < length:
+            c = string[vars.i]
             if c not in valid_chars:
                 return s
             elif c == '.':
@@ -105,27 +137,27 @@ class XJson:
                 else:
                     exist_dot = True
                     s += c
-                    i += 1
+                    vars.i += 1
             else:
                 s += c
-                i += 1
+                vars.i += 1
         return s
 
     @classmethod
-    def parsed_keyword(cls, string, i):
+    def parsed_keyword(cls, string, vars):
         length = len(string)
         valid_keywords = {'true', 'false', 'null'}
         spaces = ' \n\t\r'
         s = ''
-        while i < length:
-            c = string[i]
+        while vars.i < length:
+            c = string[vars.i]
             if c in spaces:
-                i += 1
+                vars.i += 1
             elif c in ',}':
                 break
             else:
                 s += c
-                i += 1
+                vars.i += 1
         if s not in valid_keywords:
             return cls.parsed_error()
         return s
@@ -137,30 +169,27 @@ class XJson:
         spaces = ' \n\t\r'
         digits = '1234567890-'
         symbols = ':,{}[]'
-        i = 0
-        while i < length:
-            c = string[i]
+        vars = Vars(i=0)
+        while vars.i < length:
+            c = string[vars.i]
             if c in spaces:
-                i += 1
+                vars.i += 1
             elif c in symbols:
                 t = Token(Type.auto, c)
                 tokens.append(t)
-                i += 1
+                vars.i += 1
             elif c == '"':
-                s = cls.parsed_string(string, i)
+                s = cls.parsed_string(string, vars)
                 t = Token(Type.string, s)
                 tokens.append(t)
-                i = i + len(s) + 2
             elif c in digits:
-                s = cls.parsed_number(string, i)
+                s = cls.parsed_number(string, vars)
                 t = Token(Type.number, s)
                 tokens.append(t)
-                i += len(s)
             else:
-                s = cls.parsed_keyword(string, i)
+                s = cls.parsed_keyword(string, vars)
                 t = Token(Type.keyword, s)
                 tokens.append(t)
-                i += len(s)
         return tokens
 
     @staticmethod
@@ -262,13 +291,36 @@ class XJson:
             return cls.parsed_error()
 
     @classmethod
+    def stringified_string(cls, string):
+        t = {
+            '\\': '\\\\',
+            '"': '\\"',
+            '/': '\\/',
+            '\b': '\\b',
+            '\f': '\\f',
+            '\t': '\\t',
+            '\n': '\\n',
+            '\r': '\\r',
+            'u': 'u',
+        }
+        l = []
+        for char in string:
+            if char in t:
+                c = t[char]
+            else:
+                c = char.encode('unicode_escape').decode('utf-8')
+            l.append(c)
+        s = '"{}"'.format(''.join(l))
+        return s
+
+    @classmethod
     def stringified_value(cls, value):
         if isinstance(value, dict):
             s = cls.stringified_dict(value)
         elif isinstance(value, list):
             s = cls.stringified_list(value)
         elif isinstance(value, str):
-            s = '"{}"'.format(value)
+            s = cls.stringified_string(value)
         elif isinstance(value, bool):
             # 这个条件要放在 isinstance(value, int) 前面，bool 继承于 int
             s = 'true' if value else 'false'
@@ -286,8 +338,9 @@ class XJson:
         for key, value in data.items():
             if not isinstance(key, str):
                 return cls.stringified_error()
+            k = cls.stringified_value(key)
             v = cls.stringified_value(value)
-            kv = '"{}":{}'.format(key, v)
+            kv = '{}:{}'.format(k, v)
             l.append(kv)
         s = '{{{}}}'.format(','.join(l))
         return s
