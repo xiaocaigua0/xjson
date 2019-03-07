@@ -1,5 +1,5 @@
 # xjson
-一个 json 解析器和生成器
+一个 json 解析和生成器
 
 ## 环境
 Python：3.x

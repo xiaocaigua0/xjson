@@ -50,7 +50,7 @@ class Token(object):
         return '({})'.format(self.value)
 
 
-class Vars:
+class Args:
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             self.__dict__[k] = v
@@ -71,17 +71,16 @@ class XJson:
         raise TypeError('TypeError: data is not JSON serializable')
 
     @classmethod
-    def parsed_unicode(cls, string):
+    def _parsed_unicode(cls, string):
         try:
             s = '\\u{}'.format(string).encode('utf-8').decode('unicode_escape')
         except Exception as e:
             return cls.parsed_error()
         return s
 
-    @classmethod
-    def parsed_escape(cls, string, vars):
-        vars.i += 1
-        c = string[vars.i]
+    def _parsed_escape(self, string, args):
+        args.i += 1
+        c = string[args.i]
         t = {
             '\\': '\\',
             '"': '"',
@@ -95,203 +94,194 @@ class XJson:
         }
         s = t.get(c)
         if s is None:
-            return cls.parsed_error()
-        vars.i += 1
+            return self.parsed_error()
+        args.i += 1
         if s == 'u':
-            s = cls.parsed_unicode(string[vars.i:vars.i+4])
-            vars.i += 4
+            s = self._parsed_unicode(string[args.i:args.i+4])
+            args.i += 4
         return s
 
-    @classmethod
-    def parsed_string(cls, string, vars):
+    def _parsed_string(self, string, args):
         length = len(string)
         s = ''
-        vars.i += 1
-        while vars.i < length:
-            c = string[vars.i]
+        args.i += 1
+        while args.i < length:
+            c = string[args.i]
             if c == '"':
-                vars.i += 1
+                args.i += 1
                 return s
             elif c == '\\':
-                s += cls.parsed_escape(string, vars)
+                s += self._parsed_escape(string, args)
             else:
                 s += c
-                vars.i += 1
+                args.i += 1
         # 没有找到引号，程序出错
-        return cls.parsed_error()
+        return self.parsed_error()
 
-    @classmethod
-    def parsed_number(cls, string, vars):
+    def _parsed_number(self, string, args):
         length = len(string)
         digits = '1234567890'
         valid_chars = digits + '-' + '.' + 'e'
         exist_dot = False
         s = ''
-        while vars.i < length:
-            c = string[vars.i]
+        while args.i < length:
+            c = string[args.i]
             if c not in valid_chars:
                 return s
             elif c == '.':
                 if exist_dot:
-                    return cls.parsed_error()
+                    return self.parsed_error()
                 else:
                     exist_dot = True
                     s += c
-                    vars.i += 1
+                    args.i += 1
             else:
                 s += c
-                vars.i += 1
+                args.i += 1
         return s
 
-    @classmethod
-    def parsed_keyword(cls, string, vars):
+    def _parsed_keyword(self, string, args):
         length = len(string)
         valid_keywords = {'true', 'false', 'null'}
         spaces = ' \n\t\r'
         s = ''
-        while vars.i < length:
-            c = string[vars.i]
+        while args.i < length:
+            c = string[args.i]
             if c in spaces:
-                vars.i += 1
+                args.i += 1
             elif c in ',}':
                 break
             else:
                 s += c
-                vars.i += 1
+                args.i += 1
         if s not in valid_keywords:
-            return cls.parsed_error()
+            return self.parsed_error()
         return s
 
-    @classmethod
-    def parsed_tokens(cls, string):
+    def parsed_tokens(self, string):
         length = len(string)
         tokens = []
         spaces = ' \n\t\r'
         digits = '1234567890-'
         symbols = ':,{}[]'
-        vars = Vars(i=0)
-        while vars.i < length:
-            c = string[vars.i]
+        args = Args(i=0)
+        while args.i < length:
+            c = string[args.i]
             if c in spaces:
-                vars.i += 1
+                args.i += 1
             elif c in symbols:
                 t = Token(Type.auto, c)
                 tokens.append(t)
-                vars.i += 1
+                args.i += 1
             elif c == '"':
-                s = cls.parsed_string(string, vars)
+                s = self._parsed_string(string, args)
                 t = Token(Type.string, s)
                 tokens.append(t)
             elif c in digits:
-                s = cls.parsed_number(string, vars)
+                s = self._parsed_number(string, args)
                 t = Token(Type.number, s)
                 tokens.append(t)
             else:
-                s = cls.parsed_keyword(string, vars)
+                s = self._parsed_keyword(string, args)
                 t = Token(Type.keyword, s)
                 tokens.append(t)
         return tokens
 
-    @staticmethod
-    def valid_comma(tokens, vars):
+    def _valid_comma(self, tokens, args):
         length = len(tokens)
-        i = vars.i - 1
+        i = args.i - 1
         if tokens[i].type == Type.comma:
             return False
-        i = vars.i + 1
+        i = args.i + 1
         if i < length:
             if tokens[i].type == Type.braceRight:
                 return False
         return True
 
-    @classmethod
-    def parsed_dict(cls, tokens, vars):
+    def _parsed_dict(self, tokens, args):
         length = len(tokens)
         key = None
         data = {}
-        vars.i += 1
-        while vars.i < length:
-            t = tokens[vars.i]
+        args.i += 1
+        while args.i < length:
+            t = tokens[args.i]
             if t.type in [Type.braceLeft, Type.bracketLeft]:
                 if key is None:
-                    return cls.parsed_error()
+                    return self.parsed_error()
                 if t.type == Type.braceLeft:
-                    sub = cls.parsed_dict(tokens, vars)
+                    sub = self._parsed_dict(tokens, args)
                 else:
-                    sub = cls.parsed_list(tokens, vars)
+                    sub = self._parsed_list(tokens, args)
                 data[key] = sub
                 key = None
             elif t.type == Type.colon:
                 if key is None:
-                    return cls.parsed_error()
-                vars.i += 1
+                    return self.parsed_error()
+                args.i += 1
             elif t.type == Type.string:
                 if key is None:
                     key = t.value
                 else:
                     data[key] = t.value
                     key = None
-                vars.i += 1
+                args.i += 1
             elif t.type in [Type.number, Type.keyword]:
                 if key is None:
-                    return cls.parsed_error()
+                    return self.parsed_error()
                 data[key] = t.value
                 key = None
-                vars.i += 1
+                args.i += 1
             elif t.type == Type.comma:
-                if not cls.valid_comma(tokens, vars):
-                    return cls.parsed_error()
-                vars.i += 1
+                if not self._valid_comma(tokens, args):
+                    return self.parsed_error()
+                args.i += 1
             elif t.type == Type.braceRight:
-                vars.i += 1
+                args.i += 1
                 return data
             else:
-                return cls.parsed_error()
+                return self.parsed_error()
 
-    @classmethod
-    def parsed_list(cls, tokens, vars):
+    def _parsed_list(self, tokens, args):
         length = len(tokens)
         data = []
-        vars.i += 1
-        while vars.i < length:
-            t = tokens[vars.i]
+        args.i += 1
+        while args.i < length:
+            t = tokens[args.i]
             if t.type == Type.braceLeft:
-                sub = cls.parsed_dict(tokens, vars)
+                sub = self._parsed_dict(tokens, args)
                 data.append(sub)
             elif t.type == Type.bracketLeft:
-                sub = cls.parsed_list(tokens, vars)
+                sub = self._parsed_list(tokens, args)
                 data.append(sub)
             elif t.type in [Type.number, Type.string, Type.keyword]:
                 data.append(t.value)
-                vars.i += 1
+                args.i += 1
             elif t.type == Type.comma:
-                if not cls.valid_comma(tokens, vars):
-                    return cls.parsed_error()
-                vars.i += 1
+                if not self._valid_comma(tokens, args):
+                    return self.parsed_error()
+                args.i += 1
             elif t.type == Type.bracketRight:
-                vars.i += 1
+                args.i += 1
                 return data
             else:
-                return cls.parsed_error()
+                return self.parsed_error()
 
-    @classmethod
-    def parsed_json(cls, tokens):
+    def parsed_json(self, tokens):
         if len(tokens) == 0:
-            return cls.parsed_error()
+            return self.parsed_error()
         t = tokens[0]
         if t.type == Type.braceLeft:
-            vars = Vars(i=0)
-            data = cls.parsed_dict(tokens, vars)
+            args = Args(i=0)
+            data = self._parsed_dict(tokens, args)
             return data
         elif t.type == Type.bracketLeft:
-            vars = Vars(i=0)
-            data = cls.parsed_list(tokens, vars)
+            args = Args(i=0)
+            data = self._parsed_list(tokens, args)
             return data
         else:
-            return cls.parsed_error()
+            return self.parsed_error()
 
-    @classmethod
-    def stringified_string(cls, string):
+    def _stringified_string(self, string):
         t = {
             '\\': '\\\\',
             '"': '\\"',
@@ -313,14 +303,13 @@ class XJson:
         s = '"{}"'.format(''.join(l))
         return s
 
-    @classmethod
-    def stringified_value(cls, value):
+    def _stringified_value(self, value):
         if isinstance(value, dict):
-            s = cls.stringified_dict(value)
+            s = self._stringified_dict(value)
         elif isinstance(value, list):
-            s = cls.stringified_list(value)
+            s = self._stringified_list(value)
         elif isinstance(value, str):
-            s = cls.stringified_string(value)
+            s = self._stringified_string(value)
         elif isinstance(value, bool):
             # 这个条件要放在 isinstance(value, int) 前面，bool 继承于 int
             s = 'true' if value else 'false'
@@ -329,42 +318,42 @@ class XJson:
         elif value is None:
             s = 'null'
         else:
-            return cls.stringified_error()
+            return self.stringified_error()
         return s
 
-    @classmethod
-    def stringified_dict(cls, data):
+    def _stringified_dict(self, data):
         l = []
         for key, value in data.items():
             if not isinstance(key, str):
-                return cls.stringified_error()
-            k = cls.stringified_value(key)
-            v = cls.stringified_value(value)
+                return self.stringified_error()
+            k = self._stringified_value(key)
+            v = self._stringified_value(value)
             kv = '{}:{}'.format(k, v)
             l.append(kv)
         s = '{{{}}}'.format(','.join(l))
         return s
 
-    @classmethod
-    def stringified_list(cls, data):
-        l = [cls.stringified_value(d) for d in data]
+    def _stringified_list(self, data):
+        l = [self._stringified_value(d) for d in data]
         s = '[{}]'.format(','.join(l))
         return s
 
     @classmethod
     def parse(cls, string):
-        tokens = cls.parsed_tokens(string)
-        data = cls.parsed_json(tokens)
+        o = cls()
+        tokens = o.parsed_tokens(string)
+        data = o.parsed_json(tokens)
         return data
 
     @classmethod
     def stringify(cls, data):
+        o = cls()
         if isinstance(data, dict):
-            string = cls.stringified_dict(data)
+            string = o._stringified_dict(data)
         elif isinstance(data, list):
-            string = cls.stringified_list(data)
+            string = o._stringified_list(data)
         else:
-            string = cls.stringified_value(data)
+            string = o._stringified_value(data)
         return string
 
 

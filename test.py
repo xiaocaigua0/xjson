@@ -1,58 +1,59 @@
 import unittest
 from xjson import (
     Type,
-    Token,
     XJson,
-    Vars,
+    Args,
 )
-from utils import log
 
 
 class TestXJson(unittest.TestCase):
     def test_parsed_string(self):
         string = '"abc"'
-        vars = Vars(i=0)
-        s = XJson.parsed_string(string, vars)
+        args = Args(i=0)
+        o = XJson()
+        s = o._parsed_string(string, args)
         assert s == 'abc'
         string = '"\\"\\t\\n"'
-        vars = Vars(i=0)
-        s = XJson.parsed_string(string, vars)
+        args = Args(i=0)
+        s = o._parsed_string(string, args)
         assert s == '"\t\n'
         string = '"\\u263A"'
-        vars = Vars(i=0)
-        s = XJson.parsed_string(string, vars)
+        args = Args(i=0)
+        s = o._parsed_string(string, args)
         assert s == '\u263A'
 
     def test_parsed_number(self):
         string = '1'
-        vars = Vars(i=0)
-        s = XJson.parsed_number(string, vars)
+        args = Args(i=0)
+        o = XJson()
+        s = o._parsed_number(string, args)
         assert s == '1'
         string = '1.1'
-        vars = Vars(i=0)
-        s = XJson.parsed_number(string, vars)
+        args = Args(i=0)
+        s = o._parsed_number(string, args)
         assert s == '1.1'
         string = '-1'
-        vars = Vars(i=0)
-        s = XJson.parsed_number(string, vars)
+        args = Args(i=0)
+        s = o._parsed_number(string, args)
         assert s == '-1'
         string = '1.1e-9'
-        vars = Vars(i=0)
-        s = XJson.parsed_number(string, vars)
+        args = Args(i=0)
+        s = o._parsed_number(string, args)
         assert s == '1.1e-9'
 
     def test_parsed_keyword(self):
         string = 'true'
-        vars = Vars(i=0)
-        s = XJson.parsed_keyword(string, vars)
+        args = Args(i=0)
+        o = XJson()
+        s = o._parsed_keyword(string, args)
         assert s == 'true'
         string = 'false,'
-        vars = Vars(i=0)
-        s = XJson.parsed_keyword(string, vars)
+        args = Args(i=0)
+        s = o._parsed_keyword(string, args)
         assert s == 'false'
         string = 'null}'
-        vars = Vars(i=0)
-        s = XJson.parsed_keyword(string, vars)
+        args = Args(i=0)
+        s = o._parsed_keyword(string, args)
         assert s == 'null'
 
     def test_parsed_tokens(self):
@@ -63,7 +64,8 @@ class TestXJson(unittest.TestCase):
             "keyword": null
         }
         """
-        tokens = XJson.parsed_tokens(string)
+        o = XJson()
+        tokens = o.parsed_tokens(string)
         expected_types = [
             Type.braceLeft,
             Type.string,
